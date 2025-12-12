@@ -8,7 +8,7 @@ Accuracy: 95%+ on detecting AI-generated text
 HOW IT WORKS:
 1. Text goes in → Model analyzes patterns
 2. AI text has different patterns than human text
-3. Model outputs probability (0-100%)
+3. Model outputs probability (0-100%) dfdee
 """
 
 import torch
