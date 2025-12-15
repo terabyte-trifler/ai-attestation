@@ -26,7 +26,7 @@ use anchor_lang::prelude::*;
 // PROGRAM ID
 // ============================================================
 // Replace this after running `anchor keys list`
-declare_id!("11111111111111111111111111111111");
+declare_id!("21fNgCDmvWAchVyP7eFzaZijaCC8As7RJtuM8SGhv9qr");
 
 // ============================================================
 // CONSTANTS

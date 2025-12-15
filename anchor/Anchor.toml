@@ -15,7 +15,7 @@ skip-lint = false
 
 [programs.devnet]
 # Program ID - Replace after running `anchor keys list`
-attestation = "11111111111111111111111111111111"
+attestation = "21fNgCDmvWAchVyP7eFzaZijaCC8As7RJtuM8SGhv9qr"
 
 [programs.mainnet]
 # Mainnet program ID (set after mainnet deployment)
