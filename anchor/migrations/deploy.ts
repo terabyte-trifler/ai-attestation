@@ -7,7 +7,7 @@
 //
 // Usage:
 //   npx ts-node scripts/deploy.ts              # Deploy to devnet
-//   npx ts-node scripts/deploy.ts --mainnet    # Deploy to mainnet  
+//   npx ts-node scripts/deploy.ts --mainnet    # Deploy to mainnet
 //   npx ts-node scripts/deploy.ts --localnet   # Deploy to localnet
 //   npx ts-node scripts/deploy.ts info         # Show info only
 //   npx ts-node scripts/deploy.ts verify       # Verify deployment
@@ -51,7 +51,7 @@ interface ProgramConfig {
   bump: number;
 }
 
-interface AttestationData {
+interface Attestation {
   contentHash: number[];
   aiProbability: number;
   contentType: string;
@@ -87,11 +87,13 @@ const DEFAULT_WALLET_PATH = `${process.env.HOME}/.config/solana/id.json`;
  */
 function loadKeypair(filePath: string): Keypair {
   const resolvedPath = path.resolve(filePath);
-  
+
   if (!fs.existsSync(resolvedPath)) {
-    throw new Error(`Wallet file not found: ${resolvedPath}\nRun: solana-keygen new`);
+    throw new Error(
+      `Wallet file not found: ${resolvedPath}\nRun: solana-keygen new`
+    );
   }
-  
+
   try {
     const secretKey = JSON.parse(fs.readFileSync(resolvedPath, "utf-8"));
     return Keypair.fromSecretKey(Uint8Array.from(secretKey));
@@ -109,7 +111,7 @@ function getRpcUrl(cluster: string): string {
   if (process.env[envVar]) {
     return process.env[envVar]!;
   }
-  
+
   switch (cluster) {
     case "devnet":
       return process.env.DEVNET_RPC || clusterApiUrl("devnet");
@@ -173,31 +175,32 @@ class AttestationDeployer {
 
   constructor(config: DeployConfig) {
     this.config = config;
-    
+
     // Load wallet keypair
     const walletKeypair = loadKeypair(config.walletPath);
     this.wallet = new Wallet(walletKeypair);
-    
+
     // Create connection
     this.connection = new Connection(config.rpcUrl, config.commitment);
-    
+
     // Create Anchor provider
     this.provider = new AnchorProvider(this.connection, this.wallet, {
       preflightCommitment: config.commitment,
       commitment: config.commitment,
     });
     anchor.setProvider(this.provider);
-    
+
     // Load program from workspace
     // Note: This requires the IDL to be generated (anchor build)
     try {
-      this.program = anchor.workspace.Attestation as Program<AttestationProgram>;
+      this.program = anchor.workspace
+        .Attestation as Program<AttestationProgram>;
     } catch (error) {
       throw new Error(
         "Failed to load program. Make sure you've run 'anchor build' first."
       );
     }
-    
+
     // Derive config PDA
     [this.configPda, this.configBump] = PublicKey.findProgramAddressSync(
       [SEEDS.CONFIG],
@@ -217,28 +220,28 @@ class AttestationDeployer {
     separator();
     console.log("🚀 AI ATTESTATION PROGRAM - DEPLOYMENT INFO");
     separator();
-    
+
     console.log("\n📋 Configuration:");
     console.log(`   Cluster:      ${this.config.cluster}`);
     console.log(`   RPC URL:      ${this.config.rpcUrl}`);
     console.log(`   Commitment:   ${this.config.commitment}`);
-    
+
     console.log("\n🔑 Accounts:");
     console.log(`   Program ID:   ${this.program.programId.toBase58()}`);
     console.log(`   Admin Wallet: ${this.wallet.publicKey.toBase58()}`);
     console.log(`   Config PDA:   ${this.configPda.toBase58()}`);
-    
+
     // Get wallet balance
     const balance = await this.connection.getBalance(this.wallet.publicKey);
     console.log(`\n💰 Wallet Balance: ${formatSol(balance)} SOL`);
-    
+
     if (balance < 0.1 * LAMPORTS_PER_SOL) {
       console.log("   ⚠️  Low balance warning!");
       if (this.config.cluster === "devnet") {
         console.log("   Run: solana airdrop 2");
       }
     }
-    
+
     // Check current slot
     const slot = await this.connection.getSlot();
     console.log(`\n📊 Current Slot: ${slot.toLocaleString()}`);
@@ -249,7 +252,7 @@ class AttestationDeployer {
    */
   async isInitialized(): Promise<boolean> {
     try {
-      await this.program.account.programConfig.fetch(this.configPda);
+      await (this.program.account as any).programConfig.fetch(this.configPda);
       return true;
     } catch {
       return false;
@@ -261,7 +264,9 @@ class AttestationDeployer {
    */
   async fetchConfig(): Promise<ProgramConfig | null> {
     try {
-      const config = await this.program.account.programConfig.fetch(this.configPda);
+      const config = await (this.program.account as any).programConfig.fetch(
+        this.configPda
+      );
       return config as unknown as ProgramConfig;
     } catch {
       return null;
@@ -277,8 +282,8 @@ class AttestationDeployer {
    */
   async initialize(): Promise<string> {
     console.log("\n📦 Initializing program configuration...");
-    
-    const tx = await this.program.methods
+
+    const tx = await (this.program.methods as any)
       .initialize()
       .accounts({
         admin: this.wallet.publicKey,
@@ -286,7 +291,7 @@ class AttestationDeployer {
         systemProgram: SystemProgram.programId,
       })
       .rpc();
-    
+
     // Wait for confirmation
     const latestBlockhash = await this.connection.getLatestBlockhash();
     await this.connection.confirmTransaction({
@@ -294,7 +299,7 @@ class AttestationDeployer {
       blockhash: latestBlockhash.blockhash,
       lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
     });
-    
+
     console.log(`   ✅ Transaction: ${tx}`);
     return tx;
   }
@@ -308,20 +313,22 @@ class AttestationDeployer {
    */
   async verify(): Promise<boolean> {
     console.log("\n🔍 Verifying deployment...");
-    
+
     const config = await this.fetchConfig();
-    
+
     if (!config) {
       console.log("   ❌ Config account not found!");
       return false;
     }
-    
+
     console.log("\n   ✅ Program Config:");
     console.log(`      Admin:              ${config.admin.toBase58()}`);
-    console.log(`      Total Attestations: ${config.totalAttestations.toString()}`);
+    console.log(
+      `      Total Attestations: ${config.totalAttestations.toString()}`
+    );
     console.log(`      Is Paused:          ${config.isPaused}`);
     console.log(`      Bump:               ${config.bump}`);
-    
+
     // Verify admin matches deployer
     const adminMatches = config.admin.equals(this.wallet.publicKey);
     if (!adminMatches) {
@@ -329,7 +336,7 @@ class AttestationDeployer {
       console.log(`      Config Admin:  ${config.admin.toBase58()}`);
       console.log(`      Your Wallet:   ${this.wallet.publicKey.toBase58()}`);
     }
-    
+
     return true;
   }
 
@@ -342,25 +349,27 @@ class AttestationDeployer {
    */
   async createTestAttestation(): Promise<void> {
     console.log("\n🧪 Creating test attestation...");
-    
+
     // Generate unique content
     const testContent = `Test attestation created at ${new Date().toISOString()}`;
     const contentHash = sha256(testContent);
-    
+
     // Derive attestation PDA
     const [attestationPda] = PublicKey.findProgramAddressSync(
       [SEEDS.ATTESTATION, contentHash],
       this.program.programId
     );
-    
+
     console.log(`\n   📝 Test Content: "${testContent.slice(0, 50)}..."`);
-    console.log(`   🔑 Content Hash: ${contentHash.toString("hex").slice(0, 16)}...`);
+    console.log(
+      `   🔑 Content Hash: ${contentHash.toString("hex").slice(0, 16)}...`
+    );
     console.log(`   📍 Attestation PDA: ${shortenPubkey(attestationPda, 8)}`);
-    
+
     // Create attestation
     console.log("\n   Creating attestation...");
-    
-    const createTx = await this.program.methods
+
+    const createTx = await (this.program.methods as any)
       .createAttestation(
         Array.from(contentHash),
         7500, // 75.00% AI probability
@@ -375,14 +384,16 @@ class AttestationDeployer {
         systemProgram: SystemProgram.programId,
       })
       .rpc();
-    
+
     console.log(`   ✅ Created: ${createTx}`);
-    
+
     // Fetch and display attestation
     await sleep(1000); // Wait for finalization
-    
-    const attestation = await this.program.account.attestation.fetch(attestationPda);
-    
+
+    const attestation = (await (this.program.account as any).attestation.fetch(
+      attestationPda
+    )) as Attestation;
+
     console.log("\n   📄 Attestation Data:");
     console.log(`      AI Probability:  ${attestation.aiProbability / 100}%`);
     console.log(`      Content Type:    ${attestation.contentType}`);
@@ -390,24 +401,24 @@ class AttestationDeployer {
     console.log(`      Metadata URI:    ${attestation.metadataUri}`);
     console.log(`      Creator:         ${shortenPubkey(attestation.creator)}`);
     console.log(`      Is Verified:     ${attestation.isVerified}`);
-    
+
     // Close attestation to reclaim rent
     console.log("\n   🧹 Closing test attestation (reclaiming rent)...");
-    
-    const closeTx = await this.program.methods
+
+    const closeTx = await (this.program.methods as any)
       .closeAttestation()
       .accounts({
         creator: this.wallet.publicKey,
         attestation: attestationPda,
       })
       .rpc();
-    
+
     console.log(`   ✅ Closed: ${closeTx}`);
-    
+
     // Verify closure
     await sleep(500);
     const accountInfo = await this.connection.getAccountInfo(attestationPda);
-    
+
     if (accountInfo === null) {
       console.log("   ✅ Attestation account successfully closed!");
     } else {
@@ -426,13 +437,13 @@ class AttestationDeployer {
     try {
       // Print info
       await this.printInfo();
-      
+
       // Check initialization status
       separator("-");
       console.log("\n🔎 Checking initialization status...");
-      
+
       const isInit = await this.isInitialized();
-      
+
       if (isInit) {
         console.log("   ✅ Program is already initialized!");
         await this.verify();
@@ -441,51 +452,57 @@ class AttestationDeployer {
         await this.initialize();
         await this.verify();
       }
-      
+
       // Run test attestation
       separator("-");
       await this.createTestAttestation();
-      
+
       // Final summary
       console.log("\n");
       separator();
       console.log("🎉 DEPLOYMENT SUCCESSFUL!");
       separator();
-      
+
       console.log("\n📝 Summary:");
       console.log(`   Program ID: ${this.program.programId.toBase58()}`);
       console.log(`   Config PDA: ${this.configPda.toBase58()}`);
       console.log(`   Cluster:    ${this.config.cluster}`);
-      
+
       console.log("\n🔗 Explorer Links:");
       const explorerBase = `https://explorer.solana.com`;
-      const clusterParam = this.config.cluster === "mainnet-beta" ? "" : `?cluster=${this.config.cluster}`;
-      console.log(`   Program: ${explorerBase}/address/${this.program.programId.toBase58()}${clusterParam}`);
-      console.log(`   Config:  ${explorerBase}/address/${this.configPda.toBase58()}${clusterParam}`);
-      
+      const clusterParam =
+        this.config.cluster === "mainnet-beta"
+          ? ""
+          : `?cluster=${this.config.cluster}`;
+      console.log(
+        `   Program: ${explorerBase}/address/${this.program.programId.toBase58()}${clusterParam}`
+      );
+      console.log(
+        `   Config:  ${explorerBase}/address/${this.configPda.toBase58()}${clusterParam}`
+      );
+
       console.log("\n📋 Next Steps:");
       console.log("   1. Copy program ID to frontend .env");
       console.log("   2. Set up cNFT Merkle tree for certificates");
       console.log("   3. Configure IPFS/Arweave for metadata storage");
       console.log("   4. Deploy frontend to Vercel");
-      
+
       console.log("\n");
-      
     } catch (error: any) {
       console.error("\n");
       separator("!");
       console.error("❌ DEPLOYMENT FAILED");
       separator("!");
-      
+
       console.error(`\nError: ${error.message}`);
-      
+
       if (error.logs) {
         console.error("\n📜 Program Logs:");
         error.logs.forEach((log: string) => {
           console.error(`   ${log}`);
         });
       }
-      
+
       throw error;
     }
   }
@@ -499,7 +516,7 @@ async function main(): Promise<void> {
   // Parse CLI arguments
   const args = process.argv.slice(2);
   const command = args.find((arg) => !arg.startsWith("--")) || "deploy";
-  
+
   // Determine cluster
   let cluster: "devnet" | "mainnet-beta" | "localnet" = "devnet";
   if (args.includes("--mainnet")) {
@@ -507,7 +524,7 @@ async function main(): Promise<void> {
   } else if (args.includes("--localnet")) {
     cluster = "localnet";
   }
-  
+
   // Build config
   const config: DeployConfig = {
     cluster,
@@ -515,16 +532,16 @@ async function main(): Promise<void> {
     walletPath: process.env.WALLET_PATH || DEFAULT_WALLET_PATH,
     commitment: "confirmed",
   };
-  
+
   // Create deployer
   const deployer = new AttestationDeployer(config);
-  
+
   // Execute command
   switch (command) {
     case "deploy":
       await deployer.deploy();
       break;
-      
+
     case "info":
       await deployer.printInfo();
       const isInit = await deployer.isInitialized();
@@ -533,17 +550,17 @@ async function main(): Promise<void> {
         await deployer.verify();
       }
       break;
-      
+
     case "verify":
       await deployer.printInfo();
       await deployer.verify();
       break;
-      
+
     case "test":
       await deployer.printInfo();
       await deployer.createTestAttestation();
       break;
-      
+
     case "help":
     default:
       console.log(`
