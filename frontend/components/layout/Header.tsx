@@ -88,7 +88,7 @@ export function Header() {
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm fontmedium",
+                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium",
                     isActive
                       ? "bg-solana-purple/10 text-solana-purple"
                       : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
