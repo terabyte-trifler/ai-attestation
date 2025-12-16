@@ -1,7 +1,7 @@
 // ============================================================
 // SOLANA PROGRAM CLIENT
 // ============================================================
-import { Connection, PublicKey, SystemProgram } from "@solana/web3.js";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { AnchorProvider, Program, Idl } from "@coral-xyz/anchor";
 import { bytesToHex, hexToBytes } from "@/lib/utils";
 const PROGRAM_ID = new PublicKey(
@@ -9,6 +9,84 @@ const PROGRAM_ID = new PublicKey(
 );
 const CONFIG_SEED = Buffer.from("config");
 const ATTESTATION_SEED = Buffer.from("attestation");
+
+// Type definitions for Solana program
+export interface ProgramConfigAccount {
+  admin: PublicKey;
+  totalAttestations: number;
+  isPaused: boolean;
+  bump: number;
+}
+
+export interface AttestationAccount {
+  contentHash: Uint8Array;
+  aiProbability: number;
+  contentType: string;
+  detectionModel: string;
+  metadataUri: string;
+  creator: PublicKey;
+  createdAt: { toNumber(): number };
+  isVerified: boolean;
+  verifiedBy?: PublicKey;
+  verifiedAt?: { toNumber(): number };
+  cnftAssetId?: PublicKey;
+  bump: number;
+  version: number;
+}
+
+export interface Attestation {
+  publicKey: string;
+  contentHash: string;
+  aiProbability: number;
+  contentType: string;
+  detectionModel: string;
+  metadataUri: string;
+  creator: string;
+  createdAt: Date;
+  isVerified: boolean;
+  verifiedBy: string | null;
+  verifiedAt: Date | null;
+  cnftAssetId: string | null;
+}
+
+export interface ProgramAccount {
+  publicKey: PublicKey;
+  account: AttestationAccount;
+}
+
+// Type for program account namespace
+interface ProgramAccountNamespace {
+  programConfig: {
+    fetch: (address: PublicKey) => Promise<ProgramConfigAccount>;
+  };
+  attestation: {
+    fetch: (address: PublicKey) => Promise<AttestationAccount>;
+    all: (filters?: unknown[]) => Promise<ProgramAccount[]>;
+  };
+}
+
+// Type for program methods namespace
+interface ProgramMethodsNamespace {
+  createAttestation: (
+    contentHash: number[],
+    aiProbability: number,
+    contentType: string,
+    detectionModel: string,
+    metadataUri: string
+  ) => {
+    accounts: (accounts: {
+      creator: PublicKey;
+      attestation: PublicKey;
+      config: PublicKey;
+      systemProgram: PublicKey;
+    }) => { rpc: () => Promise<string> };
+  };
+  closeAttestation: () => {
+    accounts: (accounts: { creator: PublicKey; attestation: PublicKey }) => {
+      rpc: () => Promise<string>;
+    };
+  };
+}
 const IDL = {
   version: "0.1.0",
   name: "attestation",
@@ -97,13 +175,14 @@ export function getAttestationPda(contentHash: string): [PublicKey, number] {
   );
 }
 export class AttestationClient {
-  private connection: Connection;
   private program: Program | null = null;
-  constructor(connection: Connection) {
-    this.connection = connection;
+
+  constructor() {
+    // Program will be initialized when provider is available
   }
   initializeProgram(provider: AnchorProvider): void {
-    this.program = new Program(IDL as any, PROGRAM_ID, provider);
+    // Use any type for IDL since we don't have the generated types yet
+    this.program = new Program(IDL as unknown as Idl, provider);
   }
   getProgramId(): PublicKey {
     return PROGRAM_ID;
@@ -112,9 +191,9 @@ export class AttestationClient {
     if (!this.program) throw new Error("Program not initialized");
     const [configPda] = getConfigPda();
     try {
-      return (await this.program.account.programConfig.fetch(
-        configPda
-      )) as unknown as ProgramConfigAccount;
+      return await (
+        this.program.account as ProgramAccountNamespace
+      ).programConfig.fetch(configPda);
     } catch {
       return null;
     }
@@ -123,12 +202,12 @@ export class AttestationClient {
     if (!this.program) throw new Error("Program not initialized");
     const [attestationPda] = getAttestationPda(contentHash);
     try {
-      const account = await this.program.account.attestation.fetch(
-        attestationPda
-      );
+      const account = await (
+        this.program.account as ProgramAccountNamespace
+      ).attestation.fetch(attestationPda);
       return this.parseAttestation(
         attestationPda,
-        account as unknown as AttestationAccount
+        account as AttestationAccount
       );
     } catch {
       return null;
@@ -136,14 +215,18 @@ export class AttestationClient {
   }
   async fetchAllAttestations(): Promise<Attestation[]> {
     if (!this.program) throw new Error("Program not initialized");
-    const accounts = await this.program.account.attestation.all();
-    return accounts.map(({ publicKey, account }) =>
-      this.parseAttestation(publicKey, account as unknown as AttestationAccount)
+    const accounts = await (
+      this.program.account as ProgramAccountNamespace
+    ).attestation.all();
+    return accounts.map(({ publicKey, account }: ProgramAccount) =>
+      this.parseAttestation(publicKey, account)
     );
   }
   async fetchAttestationsByCreator(creator: PublicKey): Promise<Attestation[]> {
     if (!this.program) throw new Error("Program not initialized");
-    const accounts = await this.program.account.attestation.all([
+    const accounts = await (
+      this.program.account as ProgramAccountNamespace
+    ).attestation.all([
       {
         memcmp: {
           offset: 8 + 32 + 2 + 4 + 20 + 4 + 32 + 4 + 200,
@@ -151,8 +234,8 @@ export class AttestationClient {
         },
       },
     ]);
-    return accounts.map(({ publicKey, account }) =>
-      this.parseAttestation(publicKey, account as unknown as AttestationAccount)
+    return accounts.map(({ publicKey, account }: ProgramAccount) =>
+      this.parseAttestation(publicKey, account)
     );
   }
   async createAttestation(
@@ -163,13 +246,17 @@ export class AttestationClient {
     metadataUri: string
   ): Promise<string> {
     if (!this.program) throw new Error("Program not initialized");
+    if (!this.program.provider.publicKey)
+      throw new Error("Wallet not connected");
+
     const [configPda] = getConfigPda();
     const hashBytes = hexToBytes(contentHash);
     const [attestationPda] = getAttestationPda(contentHash);
     const probabilityBps = Math.round(aiProbability * 100);
-    return await this.program.methods
+
+    return await (this.program.methods as unknown as ProgramMethodsNamespace)
       .createAttestation(
-        hashBytes,
+        Array.from(hashBytes),
         probabilityBps,
         contentType,
         detectionModel,
@@ -185,8 +272,11 @@ export class AttestationClient {
   }
   async closeAttestation(contentHash: string): Promise<string> {
     if (!this.program) throw new Error("Program not initialized");
+    if (!this.program.provider.publicKey)
+      throw new Error("Wallet not connected");
+
     const [attestationPda] = getAttestationPda(contentHash);
-    return await this.program.methods
+    return await (this.program.methods as unknown as ProgramMethodsNamespace)
       .closeAttestation()
       .accounts({
         creator: this.program.provider.publicKey,
@@ -220,10 +310,10 @@ export class AttestationClient {
   }
 }
 let clientInstance: AttestationClient | null = null;
-export function getAttestationClient(
-  connection: Connection
-): AttestationClient {
-  if (!clientInstance) clientInstance = new AttestationClient(connection);
+export function getAttestationClient(): AttestationClient {
+  if (!clientInstance) {
+    clientInstance = new AttestationClient();
+  }
   return clientInstance;
 }
 export default AttestationClient;
