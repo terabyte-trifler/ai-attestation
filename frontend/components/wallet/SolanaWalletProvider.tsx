@@ -5,7 +5,14 @@
 // ============================================================
 // Provides Solana wallet connection and management for the application
 
-import React, { FC, ReactNode, useMemo, useCallback } from "react";
+import React, {
+  FC,
+  ReactNode,
+  useMemo,
+  useCallback,
+  useState,
+  useEffect,
+} from "react";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -62,6 +69,13 @@ export const SolanaWalletProvider: FC<SolanaWalletProviderProps> = ({
   autoConnect = true,
   onError,
 }) => {
+  // Track if component is mounted (fixes hydration mismatch)
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Memoize the RPC endpoint
   const endpoint = useMemo(() => {
     return customEndpoint || RPC_URL;
@@ -100,9 +114,14 @@ export const SolanaWalletProvider: FC<SolanaWalletProviderProps> = ({
   );
 
   // Log network information in development
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "development" && mounted) {
     console.log("Solana Network:", NETWORK);
     console.log("RPC Endpoint:", endpoint);
+  }
+
+  // Render children without wallet context during SSR to prevent hydration mismatch
+  if (!mounted) {
+    return <>{children}</>;
   }
 
   return (

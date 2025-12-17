@@ -257,14 +257,14 @@ export function ImageDetection() {
               <h3 className="font-semibold text-lg">Detection Results</h3>
               <Badge
                 variant={
-                  imageResult.aiProbability >= 70
+                  (imageResult.aiProbability ?? 50) >= 70
                     ? "ai"
-                    : imageResult.aiProbability <= 30
+                    : (imageResult.aiProbability ?? 50) <= 30
                     ? "human"
                     : "mixed"
                 }
               >
-                {imageResult.aiProbability.toFixed(1)}% AI
+                {(imageResult.aiProbability ?? 50).toFixed(1)}% AI
               </Badge>
             </div>
 
@@ -281,22 +281,22 @@ export function ImageDetection() {
                   <span
                     className={cn(
                       "font-bold",
-                      imageResult.aiProbability >= 70
+                      (imageResult.aiProbability ?? 50) >= 70
                         ? "text-red-500"
-                        : imageResult.aiProbability <= 30
+                        : (imageResult.aiProbability ?? 50) <= 30
                         ? "text-green-500"
                         : "text-yellow-500"
                     )}
                   >
-                    {formatProbability(imageResult.aiProbability)}
+                    {formatProbability(imageResult.aiProbability ?? 50)}
                   </span>
                 </div>
                 <Progress
-                  value={imageResult.aiProbability}
+                  value={imageResult.aiProbability ?? 50}
                   color={
-                    imageResult.aiProbability >= 70
+                    (imageResult.aiProbability ?? 50) >= 70
                       ? "ai"
-                      : imageResult.aiProbability <= 30
+                      : (imageResult.aiProbability ?? 50) <= 30
                       ? "human"
                       : "mixed"
                   }
@@ -343,7 +343,7 @@ export function ImageDetection() {
                   Confidence
                 </p>
                 <p className="font-medium text-sm">
-                  {formatProbability(imageResult.confidence)}
+                  {formatProbability(imageResult.confidence ?? 50)}
                 </p>
               </div>
               <div className="col-span-2">
