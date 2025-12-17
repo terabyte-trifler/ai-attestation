@@ -1,0 +1,21 @@
+# AI Attestation Backend Requirements
+# =====================================
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Data Validation
+pydantic>=2.5.0
+
+# AI/ML Libraries
+torch>=2.0.0
+transformers>=4.35.0
+pillow>=10.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+
+# Optional: For GPU support (uncomment if using CUDA)
+# torch --index-url https://download.pytorch.org/whl/cu118
