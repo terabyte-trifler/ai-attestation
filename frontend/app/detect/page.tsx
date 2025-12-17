@@ -4,8 +4,7 @@ import React, { useState } from "react";
 import { FileText, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TextDetection from "@/components/detection/TextDetection";
-// TODO: Create ImageDetection component
-// import ImageDetection from "@/components/detection/ImageDetection";
+import ImageDetection from "@/components/detection/ImageDetection";
 
 type TabType = "text" | "image";
 
@@ -46,20 +45,7 @@ export default function DetectPage() {
         })}
       </div>
       <div className="animate-in">
-        {activeTab === "text" ? (
-          <TextDetection />
-        ) : (
-          <div className="text-center py-12">
-            <ImageIcon className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              Image Detection Coming Soon
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400">
-              Image detection functionality will be available in a future
-              update.
-            </p>
-          </div>
-        )}
+        {activeTab === "text" ? <TextDetection /> : <ImageDetection />}
       </div>
     </div>
   );
