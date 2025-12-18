@@ -5,19 +5,12 @@
 // ============================================================
 // Provides Solana wallet connection and management for the application
 
-import React, {
-  FC,
-  ReactNode,
-  useMemo,
-  useCallback,
-  useState,
-  useEffect,
-} from "react";
+import React, { FC, ReactNode, useMemo, useCallback } from "react";
+import dynamic from "next/dynamic";
 import {
   ConnectionProvider,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
@@ -30,6 +23,15 @@ import { WalletError } from "@solana/wallet-adapter-base";
 
 // Import wallet adapter styles
 import "@solana/wallet-adapter-react-ui/styles.css";
+
+// Dynamically import WalletModalProvider to prevent hydration issues
+const WalletModalProvider = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletModalProvider
+    ),
+  { ssr: false }
+);
 
 // ============================================================
 // TYPES & CONFIGURATION
@@ -69,13 +71,6 @@ export const SolanaWalletProvider: FC<SolanaWalletProviderProps> = ({
   autoConnect = true,
   onError,
 }) => {
-  // Track if component is mounted (fixes hydration mismatch)
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   // Memoize the RPC endpoint
   const endpoint = useMemo(() => {
     return customEndpoint || RPC_URL;
@@ -112,17 +107,6 @@ export const SolanaWalletProvider: FC<SolanaWalletProviderProps> = ({
     },
     [onError]
   );
-
-  // Log network information in development
-  if (process.env.NODE_ENV === "development" && mounted) {
-    console.log("Solana Network:", NETWORK);
-    console.log("RPC Endpoint:", endpoint);
-  }
-
-  // Render children without wallet context during SSR to prevent hydration mismatch
-  if (!mounted) {
-    return <>{children}</>;
-  }
 
   return (
     <ConnectionProvider endpoint={endpoint} config={CONNECTION_CONFIG}>
