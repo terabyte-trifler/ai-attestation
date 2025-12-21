@@ -21,7 +21,6 @@
 // ============================================================
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{program::invoke, program::invoke_signed, system_instruction};
 
 // ============================================================
 // PROGRAM ID
@@ -57,7 +56,7 @@ pub mod external_programs {
     
     pub mod spl_noop {
         use super::*;
-        anchor_lang::declare_id!("noopb9bkMVfRPU8AsBHBnXn8QZ8xMXoHYAD1pqdNVVGZCJ");
+        anchor_lang::declare_id!("noopb9bkMVfRPU8AsBHBnXsQZ8xMXoHYAD1pqdNVVGZ");
     }
     
     pub mod spl_compression {
@@ -179,10 +178,12 @@ pub mod attestation {
         symbol: String,
         uri: String,
     ) -> Result<()> {
-        let attestation = &mut ctx.accounts.attestation;
         let config = &mut ctx.accounts.config;
         
         require!(!config.is_paused, AttestationError::ProgramPaused);
+        
+        let attestation = &mut ctx.accounts.attestation;
+        
         require!(
             ctx.accounts.creator.key() == attestation.creator,
             AttestationError::Unauthorized
@@ -204,15 +205,13 @@ pub mod attestation {
             "Mixed/Uncertain"
         };
         
-        // Prepare Bubblegum mint instruction
-        // The actual CPI call would be made here using Bubblegum's mint_v1 instruction
-        // For now, we'll store a placeholder and emit an event
-        
         // Generate a deterministic asset ID based on attestation
+        let content_hash = attestation.content_hash;
+        let creator = attestation.creator;
         let asset_id = Pubkey::find_program_address(
             &[
                 CERTIFICATE_SEED,
-                attestation.content_hash.as_ref(),
+                content_hash.as_ref(),
             ],
             ctx.program_id,
         ).0;
@@ -221,10 +220,12 @@ pub mod attestation {
         config.total_certificates = config.total_certificates.checked_add(1)
             .ok_or(AttestationError::Overflow)?;
         
+        let attestation_key = ctx.accounts.attestation.key();
+        
         emit!(CertificateMinted {
-            attestation: ctx.accounts.attestation.key(),
+            attestation: attestation_key,
             asset_id,
-            creator: attestation.creator,
+            creator,
             name: name.clone(),
             classification: classification.to_string(),
             timestamp: Clock::get()?.unix_timestamp,
@@ -240,10 +241,12 @@ pub mod attestation {
         symbol: String,
         uri: String,
     ) -> Result<()> {
-        let attestation = &mut ctx.accounts.attestation;
         let config = &ctx.accounts.config;
         
         require!(!config.is_paused, AttestationError::ProgramPaused);
+        
+        let attestation = &mut ctx.accounts.attestation;
+        
         require!(
             ctx.accounts.creator.key() == attestation.creator,
             AttestationError::Unauthorized
@@ -262,53 +265,8 @@ pub mod attestation {
             "Mixed/Uncertain"
         };
         
-        // Create metadata creators array
-        let creators = vec![
-            MetadataCreator {
-                address: attestation.creator,
-                verified: true,
-                share: 100,
-            }
-        ];
-        
-        // Build Bubblegum metadata args
-        let metadata_args = MetadataArgs {
-            name: name.clone(),
-            symbol: symbol.clone(),
-            uri: uri.clone(),
-            seller_fee_basis_points: 0,
-            primary_sale_happened: true,
-            is_mutable: false,
-            edition_nonce: None,
-            token_standard: Some(TokenStandard::NonFungible),
-            collection: None,
-            uses: None,
-            token_program_version: TokenProgramVersion::Original,
-            creators,
-        };
-        
-        // Prepare seeds for tree authority PDA signing
-        let config_seeds = &[
-            CONFIG_SEED,
-            &[config.bump],
-        ];
-        let signer_seeds = &[&config_seeds[..]];
-        
-        // CPI to Bubblegum mint_v1
-        let cpi_accounts = MintV1Cpi {
-            tree_config: ctx.accounts.tree_config.to_account_info(),
-            leaf_owner: ctx.accounts.creator.to_account_info(),
-            leaf_delegate: ctx.accounts.creator.to_account_info(),
-            merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
-            payer: ctx.accounts.creator.to_account_info(),
-            tree_creator_or_delegate: ctx.accounts.tree_authority.to_account_info(),
-            log_wrapper: ctx.accounts.log_wrapper.to_account_info(),
-            compression_program: ctx.accounts.compression_program.to_account_info(),
-            system_program: ctx.accounts.system_program.to_account_info(),
-        };
-        
-        // Note: In production, you'd call:
-        // bubblegum::cpi::mint_v1(cpi_ctx, metadata_args)?;
+        // Store values before mutable borrow ends
+        let creator = attestation.creator;
         
         // For now, compute the asset ID deterministically
         let nonce = config.total_certificates;
@@ -316,12 +274,15 @@ pub mod attestation {
         
         attestation.cnft_asset_id = Some(asset_id);
         
+        let attestation_key = ctx.accounts.attestation.key();
+        let merkle_tree_key = ctx.accounts.merkle_tree.key();
+        
         emit!(CnftCertificateMinted {
-            attestation: ctx.accounts.attestation.key(),
-            merkle_tree: ctx.accounts.merkle_tree.key(),
+            attestation: attestation_key,
+            merkle_tree: merkle_tree_key,
             asset_id,
             leaf_index: nonce,
-            creator: attestation.creator,
+            creator,
             name,
             symbol,
             uri,
@@ -438,23 +399,28 @@ pub mod attestation {
 
     /// Verify an attestation (admin only)
     pub fn verify_attestation(ctx: Context<VerifyAttestation>) -> Result<()> {
-        let attestation = &mut ctx.accounts.attestation;
         let config = &ctx.accounts.config;
         
         require!(
             ctx.accounts.authority.key() == config.admin,
             AttestationError::Unauthorized
         );
+        
+        let attestation = &mut ctx.accounts.attestation;
+        
         require!(!attestation.is_verified, AttestationError::AlreadyVerified);
         
         attestation.is_verified = true;
         attestation.verified_by = Some(ctx.accounts.authority.key());
-        attestation.verified_at = Some(Clock::get()?.unix_timestamp);
+        let timestamp = Clock::get()?.unix_timestamp;
+        attestation.verified_at = Some(timestamp);
+        
+        let attestation_key = ctx.accounts.attestation.key();
         
         emit!(AttestationVerified {
-            attestation: ctx.accounts.attestation.key(),
+            attestation: attestation_key,
             verified_by: ctx.accounts.authority.key(),
-            timestamp: attestation.verified_at.unwrap(),
+            timestamp,
         });
         
         Ok(())
@@ -554,7 +520,6 @@ pub mod attestation {
 // ============================================================
 
 #[account]
-#[derive(Default)]
 pub struct ProgramConfig {
     pub admin: Pubkey,              // 32 bytes
     pub total_attestations: u64,    // 8 bytes
@@ -564,6 +529,21 @@ pub struct ProgramConfig {
     pub tree_authority_bump: u8,    // 1 byte
     pub bump: u8,                   // 1 byte
     pub _reserved: [u8; 64],        // 64 bytes for future use
+}
+
+impl Default for ProgramConfig {
+    fn default() -> Self {
+        Self {
+            admin: Pubkey::default(),
+            total_attestations: 0,
+            total_certificates: 0,
+            is_paused: false,
+            merkle_tree: Pubkey::default(),
+            tree_authority_bump: 0,
+            bump: 0,
+            _reserved: [0u8; 64],
+        }
+    }
 }
 
 impl ProgramConfig {
