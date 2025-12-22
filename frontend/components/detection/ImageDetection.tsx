@@ -116,15 +116,17 @@ export function ImageDetection() {
   const handleAttest = async () => {
     if (!result) return;
     const imageResult = result as ImageDetectionResult;
-    // Generate content hash (in a real app, this would be done server-side)
-    const contentHash = btoa(file?.name || "image").slice(0, 32);
-    const aiProbability = imageResult.aiProbability || 50;
+    // Use content hash from response or generate one
+    const contentHash =
+      imageResult.content_hash || btoa(file?.name || "image").slice(0, 32);
+    // Use the helper to get the correct AI probability
+    const probability = getAiProbability(imageResult);
 
     const tx = await createAttestation(
       contentHash,
-      aiProbability,
+      probability,
       "image",
-      imageResult.detectionModel,
+      getDetectionModel(imageResult),
       ""
     );
 
@@ -341,15 +343,9 @@ export function ImageDetection() {
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-lg">Detection Results</h3>
               <Badge
-                variant={
-                  (imageResult.aiProbability ?? 50) >= 70
-                    ? "ai"
-                    : (imageResult.aiProbability ?? 50) <= 30
-                    ? "human"
-                    : "mixed"
-                }
+                variant={aiProb >= 70 ? "ai" : aiProb <= 30 ? "human" : "mixed"}
               >
-                {(imageResult.aiProbability ?? 50).toFixed(1)}% AI
+                {aiProb.toFixed(1)}% AI
               </Badge>
             </div>
 
@@ -357,7 +353,9 @@ export function ImageDetection() {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Bot className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm font-medium">AI Detection</span>
+                  <span className="text-sm font-medium">
+                    AI Generated Detection
+                  </span>
                 </div>
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-gray-600 dark:text-gray-400">
@@ -366,29 +364,23 @@ export function ImageDetection() {
                   <span
                     className={cn(
                       "font-bold",
-                      (imageResult.aiProbability ?? 50) >= 70
+                      aiProb >= 70
                         ? "text-red-500"
-                        : (imageResult.aiProbability ?? 50) <= 30
+                        : aiProb <= 30
                         ? "text-green-500"
                         : "text-yellow-500"
                     )}
                   >
-                    {formatProbability(imageResult.aiProbability ?? 50)}
+                    {formatProbability(aiProb)}
                   </span>
                 </div>
                 <Progress
-                  value={imageResult.aiProbability ?? 50}
-                  color={
-                    (imageResult.aiProbability ?? 50) >= 70
-                      ? "ai"
-                      : (imageResult.aiProbability ?? 50) <= 30
-                      ? "human"
-                      : "mixed"
-                  }
+                  value={aiProb}
+                  color={aiProb >= 70 ? "ai" : aiProb <= 30 ? "human" : "mixed"}
                 />
               </div>
 
-              {imageResult.isDeepfake !== undefined && (
+              {deepfakeProb !== null && (
                 <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50">
                   <div className="flex items-center gap-2 mb-2">
                     <Eye className="w-4 h-4 text-gray-500" />
@@ -396,19 +388,41 @@ export function ImageDetection() {
                       Deepfake Analysis
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {imageResult.isDeepfake
-                      ? "⚠️ Potential deepfake detected"
-                      : "✅ No deepfake indicators found"}
-                  </p>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      Deepfake Probability
+                    </span>
+                    <span
+                      className={cn(
+                        "font-bold",
+                        deepfakeProb >= 70
+                          ? "text-red-500"
+                          : deepfakeProb <= 30
+                          ? "text-green-500"
+                          : "text-yellow-500"
+                      )}
+                    >
+                      {formatProbability(deepfakeProb)}
+                    </span>
+                  </div>
+                  <Progress
+                    value={deepfakeProb}
+                    color={
+                      deepfakeProb >= 70
+                        ? "ai"
+                        : deepfakeProb <= 30
+                        ? "human"
+                        : "mixed"
+                    }
+                  />
                 </div>
               )}
 
-              {imageResult.sourceModel && (
+              {imageResult?.overall?.assessment && (
                 <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20">
-                  <p className="text-sm font-medium mb-1">Detected Source</p>
+                  <p className="text-sm font-medium mb-1">Overall Assessment</p>
                   <p className="text-sm text-blue-600 dark:text-blue-400">
-                    {imageResult.sourceModel}
+                    {imageResult.overall.assessment}
                   </p>
                 </div>
               )}
@@ -419,16 +433,14 @@ export function ImageDetection() {
                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Model
                 </p>
-                <p className="font-medium text-sm">
-                  {imageResult.detectionModel}
-                </p>
+                <p className="font-medium text-sm">{detectionModel}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Confidence
                 </p>
                 <p className="font-medium text-sm">
-                  {formatProbability(imageResult.confidence ?? 50)}
+                  {formatProbability(confidence)}
                 </p>
               </div>
               <div className="col-span-2">
@@ -436,7 +448,8 @@ export function ImageDetection() {
                   Content Hash
                 </p>
                 <p className="font-mono text-xs break-all">
-                  {btoa(file?.name || "image").slice(0, 32)}
+                  {imageResult?.content_hash ||
+                    btoa(file?.name || "image").slice(0, 32)}
                 </p>
               </div>
             </div>
