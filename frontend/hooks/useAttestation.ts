@@ -15,21 +15,32 @@ export function useProgram() {
 
   // Initialize client once
   const [client] = useState(() => getAttestationClient());
+  const [initError, setInitError] = useState<string | null>(null);
 
   // Compute ready state
-  const isReady = Boolean(wallet.publicKey && wallet.signTransaction);
+  const isReady = Boolean(
+    wallet.publicKey && wallet.signTransaction && client.isInitialized()
+  );
 
   // Initialize program when wallet is ready
   useEffect(() => {
-    if (isReady && wallet.publicKey && wallet.signTransaction) {
-      const provider = new AnchorProvider(connection, wallet as never, {
-        commitment: "confirmed",
-      });
-      client.initializeProgram(provider);
+    if (wallet.publicKey && wallet.signTransaction) {
+      try {
+        const provider = new AnchorProvider(connection, wallet as never, {
+          commitment: "confirmed",
+        });
+        client.initializeProgram(provider);
+        setInitError(client.getInitError());
+      } catch (error) {
+        console.error("Failed to create provider:", error);
+        setInitError(
+          error instanceof Error ? error.message : "Failed to initialize"
+        );
+      }
     }
-  }, [client, connection, wallet, isReady]);
+  }, [client, connection, wallet]);
 
-  return { client, isReady, connection, wallet };
+  return { client, isReady, connection, wallet, initError };
 }
 export function useAttestations() {
   const { client, isReady } = useProgram();
@@ -106,7 +117,7 @@ export function useAttestation(contentHash: string | null) {
   return { attestation, isLoading, error, refetch: fetchAttestation };
 }
 export function useCreateAttestation() {
-  const { client, isReady } = useProgram();
+  const { client, isReady, initError } = useProgram();
   const [isCreating, setIsCreating] = useState(false);
   const [txSignature, setTxSignature] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,13 +129,39 @@ export function useCreateAttestation() {
       detectionModel: string,
       metadataUri: string = ""
     ): Promise<string | null> => {
-      if (!client || !isReady) {
-        setError("Wallet not connected");
+      console.log("useCreateAttestation called", {
+        isReady,
+        initError,
+        hasClient: !!client,
+      });
+
+      if (!client) {
+        const errMsg = "Program client not initialized";
+        console.error(errMsg);
+        setError(errMsg);
         return null;
       }
+
+      if (!isReady) {
+        const errMsg =
+          initError || "Wallet not connected or program not initialized";
+        console.error(errMsg);
+        setError(errMsg);
+        return null;
+      }
+
       setIsCreating(true);
       setError(null);
       setTxSignature(null);
+
+      console.log("Calling client.createAttestation with:", {
+        contentHash,
+        aiProbability,
+        contentType,
+        detectionModel,
+        metadataUri,
+      });
+
       try {
         const tx = await client.createAttestation(
           contentHash,
@@ -133,9 +170,11 @@ export function useCreateAttestation() {
           detectionModel,
           metadataUri
         );
+        console.log("Transaction successful:", tx);
         setTxSignature(tx);
         return tx;
       } catch (err) {
+        console.error("createAttestation error:", err);
         setError(
           err instanceof Error ? err.message : "Failed to create attestation"
         );

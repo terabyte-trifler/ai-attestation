@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useDropzone } from "react-dropzone";
 import Image from "next/image";
 import { Button, Card, CardContent, Badge, Progress } from "@/components/ui";
@@ -17,6 +18,7 @@ import {
   ExternalLink,
   Eye,
   Bot,
+  Wallet,
 } from "lucide-react";
 import {
   cn,
@@ -27,6 +29,15 @@ import {
 import { ImageDetectionResult } from "@/types";
 import { ImageDetectionMode } from "@/lib/api/client";
 import toast from "react-hot-toast";
+
+// Dynamically import wallet button to avoid SSR issues
+const WalletMultiButton = dynamic(
+  () =>
+    import("@solana/wallet-adapter-react-ui").then(
+      (mod) => mod.WalletMultiButton
+    ),
+  { ssr: false }
+);
 
 const detectionModes: {
   value: ImageDetectionMode;
@@ -114,7 +125,20 @@ export function ImageDetection() {
   };
 
   const handleAttest = async () => {
-    if (!result) return;
+    console.log("handleAttest called");
+
+    if (!result) {
+      console.log("No result available");
+      toast.error("No detection result available");
+      return;
+    }
+
+    if (!connected) {
+      console.log("Wallet not connected");
+      toast.error("Please connect your wallet first");
+      return;
+    }
+
     const imageResult = result as ImageDetectionResult;
     // Use content hash from response or generate one
     const contentHash =
@@ -122,19 +146,35 @@ export function ImageDetection() {
     // Use the helper to get the correct AI probability
     const probability = getAiProbability(imageResult);
 
-    const tx = await createAttestation(
+    console.log("Creating attestation with:", {
       contentHash,
       probability,
-      "image",
-      getDetectionModel(imageResult),
-      ""
-    );
+      model: getDetectionModel(imageResult),
+    });
 
-    if (tx) {
-      toast.success("Attestation created!");
-      setAttestationComplete(true);
-    } else {
-      toast.error(attestError || "Failed to create attestation");
+    try {
+      const tx = await createAttestation(
+        contentHash,
+        probability,
+        "image",
+        getDetectionModel(imageResult),
+        ""
+      );
+
+      console.log("Transaction result:", tx);
+
+      if (tx) {
+        toast.success("Attestation created!");
+        setAttestationComplete(true);
+      } else {
+        console.log("Attestation error:", attestError);
+        toast.error(attestError || "Failed to create attestation");
+      }
+    } catch (error) {
+      console.error("Attestation error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create attestation"
+      );
     }
   };
 
@@ -472,9 +512,10 @@ export function ImageDetection() {
                       Create Attestation
                     </Button>
                   ) : (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Connect wallet to create attestation
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <Wallet className="w-4 h-4 text-gray-400" />
+                      <WalletMultiButton className="!bg-indigo-600 !rounded-lg !text-sm !font-medium !h-9" />
+                    </div>
                   )}
                 </div>
               ) : (

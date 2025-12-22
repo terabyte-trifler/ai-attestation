@@ -182,14 +182,33 @@ export function getAttestationPda(contentHash: string): [PublicKey, number] {
 }
 export class AttestationClient {
   private program: Program | null = null;
+  private initError: string | null = null;
 
   constructor() {
     // Program will be initialized when provider is available
   }
+
   initializeProgram(provider: AnchorProvider): void {
-    // Use any type for IDL since we don't have the generated types yet
-    this.program = new Program(IDL as unknown as Idl, provider);
+    try {
+      // For Anchor 0.30.x, we need the IDL with proper format
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      this.program = new Program(IDL as any, provider);
+      this.initError = null;
+    } catch (error) {
+      console.error("Failed to initialize program:", error);
+      this.initError = error instanceof Error ? error.message : "Unknown error";
+      this.program = null;
+    }
   }
+
+  isInitialized(): boolean {
+    return this.program !== null;
+  }
+
+  getInitError(): string | null {
+    return this.initError;
+  }
+
   getProgramId(): PublicKey {
     return PROGRAM_ID;
   }
