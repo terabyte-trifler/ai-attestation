@@ -88,6 +88,12 @@ interface ProgramMethodsNamespace {
   };
 }
 const IDL = {
+  address: "21fNgCDmvWAchVyP7eFzaZijaCC8As7RJtuM8SGhv9qr",
+  metadata: {
+    name: "attestation",
+    version: "0.1.0",
+    spec: "0.1.0",
+  },
   version: "0.1.0",
   name: "attestation",
   instructions: [
