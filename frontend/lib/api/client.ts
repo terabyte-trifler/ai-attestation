@@ -4,7 +4,7 @@
 import { TextDetectionResult, ImageDetectionResult } from "@/types";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 // Additional types for API client
-export type ImageDetectionMode = "ai" | "deepfake" | "both";
+export type ImageDetectionMode = "ai_generated" | "deepfake" | "both";
 
 export interface ServiceStatus {
   status: "healthy" | "degraded" | "unhealthy";

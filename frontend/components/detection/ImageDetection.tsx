@@ -44,7 +44,7 @@ const detectionModes: {
     description: "Detect manipulated faces",
   },
   {
-    value: "ai",
+    value: "ai_generated",
     label: "AI Image Only",
     description: "Detect AI-generated images",
   },
