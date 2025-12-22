@@ -145,6 +145,72 @@ export function ImageDetection() {
 
   const imageResult = result as ImageDetectionResult | null;
 
+  // Helper to extract AI probability from different response formats
+  const getAiProbability = (res: ImageDetectionResult | null): number => {
+    if (!res) return 50;
+    // "both" mode - use overall or ai_generated_analysis
+    if (res.overall?.ai_probability !== undefined) {
+      return res.overall.ai_probability;
+    }
+    if (res.ai_generated_analysis?.probability !== undefined) {
+      return res.ai_generated_analysis.probability;
+    }
+    // Single mode responses
+    if (res.ai_probability !== undefined) {
+      return res.ai_probability;
+    }
+    if (res.aiProbability !== undefined) {
+      return res.aiProbability;
+    }
+    if (res.deepfake_probability !== undefined) {
+      return res.deepfake_probability;
+    }
+    return 50;
+  };
+
+  const getDeepfakeProbability = (
+    res: ImageDetectionResult | null
+  ): number | null => {
+    if (!res) return null;
+    if (res.deepfake_analysis?.probability !== undefined) {
+      return res.deepfake_analysis.probability;
+    }
+    if (res.deepfake_probability !== undefined) {
+      return res.deepfake_probability;
+    }
+    return null;
+  };
+
+  const getConfidence = (res: ImageDetectionResult | null): number => {
+    if (!res) return 50;
+    if (res.ai_generated_analysis?.confidence !== undefined) {
+      return res.ai_generated_analysis.confidence;
+    }
+    if (res.confidence !== undefined) {
+      return res.confidence;
+    }
+    return 50;
+  };
+
+  const getDetectionModel = (res: ImageDetectionResult | null): string => {
+    if (!res) return "unknown";
+    if (res.ai_generated_analysis?.model) {
+      return res.ai_generated_analysis.model;
+    }
+    if (res.detection_model) {
+      return res.detection_model;
+    }
+    if (res.detectionModel) {
+      return res.detectionModel;
+    }
+    return "unknown";
+  };
+
+  const aiProb = getAiProbability(imageResult);
+  const deepfakeProb = getDeepfakeProbability(imageResult);
+  const confidence = getConfidence(imageResult);
+  const detectionModel = getDetectionModel(imageResult);
+
   return (
     <div className="space-y-6">
       <Card>

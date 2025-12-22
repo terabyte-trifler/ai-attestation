@@ -25,11 +25,37 @@ export interface SentenceAnalysis {
 }
 
 export interface ImageDetectionResult {
-  aiProbability: number;
-  isDeepfake: boolean;
+  aiProbability?: number;
+  isDeepfake?: boolean;
   sourceModel?: string; // "DALL-E", "Midjourney", etc.
-  confidence: number;
-  detectionModel: string;
+  confidence?: number;
+  detectionModel?: string;
+  // Fields for "both" mode
+  content_type?: string;
+  content_hash?: string;
+  deepfake_analysis?: {
+    probability: number;
+    classification: string;
+    confidence: number;
+    model: string;
+  };
+  ai_generated_analysis?: {
+    probability: number;
+    classification: string;
+    confidence: number;
+    model: string;
+  };
+  overall?: {
+    ai_probability: number;
+    classification: string;
+    assessment: string;
+  };
+  // Fields for single mode
+  deepfake_probability?: number;
+  real_probability?: number;
+  ai_probability?: number;
+  classification?: string;
+  detection_model?: string;
 }
 
 // Attestation Types
