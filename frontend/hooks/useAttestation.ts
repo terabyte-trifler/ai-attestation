@@ -17,10 +17,8 @@ export function useProgram() {
   const [client] = useState(() => getAttestationClient());
   const [initError, setInitError] = useState<string | null>(null);
 
-  // Compute ready state
-  const isReady = Boolean(
-    wallet.publicKey && wallet.signTransaction && client.isInitialized()
-  );
+  // Compute ready state - just need wallet connected
+  const isReady = Boolean(wallet.publicKey && wallet.signTransaction);
 
   // Initialize program when wallet is ready
   useEffect(() => {

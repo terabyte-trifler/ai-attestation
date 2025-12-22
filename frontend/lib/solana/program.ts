@@ -270,7 +270,14 @@ export class AttestationClient {
     detectionModel: string,
     metadataUri: string
   ): Promise<string> {
-    if (!this.program) throw new Error("Program not initialized");
+    if (!this.program) {
+      throw new Error(
+        `Program not initialized. Init error: ${
+          this.initError || "Unknown error"
+        }`
+      );
+    }
+
     if (!this.program.provider.publicKey)
       throw new Error("Wallet not connected");
 
