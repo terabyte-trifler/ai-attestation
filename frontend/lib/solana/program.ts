@@ -190,9 +190,9 @@ export class AttestationClient {
 
   initializeProgram(provider: AnchorProvider): void {
     try {
-      // For Anchor 0.30.x, we need the IDL with proper format
+      // For Anchor 0.29.x, pass IDL and programId separately
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.program = new Program(IDL as any, provider);
+      this.program = new Program(IDL as any, PROGRAM_ID, provider);
       this.initError = null;
     } catch (error) {
       console.error("Failed to initialize program:", error);
@@ -217,7 +217,7 @@ export class AttestationClient {
     const [configPda] = getConfigPda();
     try {
       return await (
-        this.program.account as ProgramAccountNamespace
+        this.program.account as unknown as ProgramAccountNamespace
       ).programConfig.fetch(configPda);
     } catch {
       return null;
@@ -228,7 +228,7 @@ export class AttestationClient {
     const [attestationPda] = getAttestationPda(contentHash);
     try {
       const account = await (
-        this.program.account as ProgramAccountNamespace
+        this.program.account as unknown as ProgramAccountNamespace
       ).attestation.fetch(attestationPda);
       return this.parseAttestation(
         attestationPda,
@@ -241,7 +241,7 @@ export class AttestationClient {
   async fetchAllAttestations(): Promise<Attestation[]> {
     if (!this.program) throw new Error("Program not initialized");
     const accounts = await (
-      this.program.account as ProgramAccountNamespace
+      this.program.account as unknown as ProgramAccountNamespace
     ).attestation.all();
     return accounts.map(({ publicKey, account }: ProgramAccount) =>
       this.parseAttestation(publicKey, account)
@@ -250,7 +250,7 @@ export class AttestationClient {
   async fetchAttestationsByCreator(creator: PublicKey): Promise<Attestation[]> {
     if (!this.program) throw new Error("Program not initialized");
     const accounts = await (
-      this.program.account as ProgramAccountNamespace
+      this.program.account as unknown as ProgramAccountNamespace
     ).attestation.all([
       {
         memcmp: {
