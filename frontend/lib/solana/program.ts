@@ -296,7 +296,10 @@ export class AttestationClient {
       // Create a hash from the content
       const encoder = new TextEncoder();
       const data = encoder.encode(contentHash);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      const hashBuffer = await crypto.subtle.digest(
+        "SHA-256",
+        data.buffer as ArrayBuffer
+      );
       hashBytes = new Uint8Array(hashBuffer);
     }
 
