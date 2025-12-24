@@ -20,12 +20,7 @@ import {
   Bot,
   Wallet,
 } from "lucide-react";
-import {
-  cn,
-  formatProbability,
-  formatFileSize,
-  getExplorerUrl,
-} from "@/lib/utils";
+import { cn, formatProbability, formatFileSize } from "@/lib/utils";
 import { ImageDetectionResult } from "@/types";
 import { ImageDetectionMode } from "@/lib/api/client";
 import toast from "react-hot-toast";
@@ -499,9 +494,7 @@ export function ImageDetection() {
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                     <Shield className="w-5 h-5" />
-                    <span className="text-sm">
-                      Create permanent on-chain attestation
-                    </span>
+                    <span className="text-sm">Save attestation record</span>
                   </div>
                   {connected ? (
                     <Button
@@ -522,18 +515,24 @@ export function ImageDetection() {
                 <div className="text-center space-y-3">
                   <div className="flex items-center justify-center gap-2 text-green-500">
                     <Check className="w-6 h-6" />
-                    <span className="font-semibold">Attestation Created!</span>
+                    <span className="font-semibold">Attestation Saved!</span>
                   </div>
                   {txSignature && (
-                    <a
-                      href={getExplorerUrl(txSignature, "tx")}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-solana-purple hover:underline"
-                    >
-                      View on Explorer
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500">
+                        Record ID:{" "}
+                        <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">
+                          {txSignature.slice(0, 16)}...
+                        </code>
+                      </p>
+                      <a
+                        href="/attestations"
+                        className="inline-flex items-center gap-1 text-sm text-solana-purple hover:underline"
+                      >
+                        View All Attestations
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
                   )}
                 </div>
               )}
