@@ -1,9 +1,19 @@
 // ============================================================
 // SOLANA PROGRAM CLIENT
 // ============================================================
-import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { AnchorProvider, Program, Idl } from "@coral-xyz/anchor";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+} from "@solana/web3.js";
+import { AnchorProvider, Program } from "@coral-xyz/anchor";
 import { bytesToHex, hexToBytes } from "@/lib/utils";
+
+// Instruction discriminators from the IDL
+const CREATE_ATTESTATION_DISCRIMINATOR = Buffer.from([
+  49, 24, 67, 80, 12, 249, 96, 239,
+]);
 const PROGRAM_ID = new PublicKey(
   process.env.NEXT_PUBLIC_PROGRAM_ID || "11111111111111111111111111111111"
 );
@@ -182,6 +192,7 @@ export function getAttestationPda(contentHash: string): [PublicKey, number] {
 }
 export class AttestationClient {
   private program: Program | null = null;
+  private provider: AnchorProvider | null = null;
   private initError: string | null = null;
 
   constructor() {
@@ -190,6 +201,7 @@ export class AttestationClient {
 
   initializeProgram(provider: AnchorProvider): void {
     try {
+      this.provider = provider;
       // For Anchor 0.29.x, pass IDL and programId separately
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.program = new Program(IDL as any, PROGRAM_ID, provider);
@@ -198,11 +210,13 @@ export class AttestationClient {
       console.error("Failed to initialize program:", error);
       this.initError = error instanceof Error ? error.message : "Unknown error";
       this.program = null;
+      // Still store provider for raw transactions
+      this.provider = provider;
     }
   }
 
   isInitialized(): boolean {
-    return this.program !== null;
+    return this.provider !== null;
   }
 
   getInitError(): string | null {
@@ -270,37 +284,109 @@ export class AttestationClient {
     detectionModel: string,
     metadataUri: string
   ): Promise<string> {
-    // For now, create a local attestation record
-    // In production, this would call the Solana program
-    const attestation = {
-      contentHash,
-      aiProbability,
-      contentType,
-      detectionModel,
-      metadataUri,
-      createdAt: new Date().toISOString(),
-      signature: this.generateSignature(),
-    };
+    if (!this.provider) throw new Error("Provider not initialized");
+    if (!this.provider.publicKey) throw new Error("Wallet not connected");
 
-    // Store in localStorage for demo
-    const attestations = JSON.parse(
-      localStorage.getItem("attestations") || "[]"
-    );
-    attestations.push(attestation);
-    localStorage.setItem("attestations", JSON.stringify(attestations));
-
-    console.log("Attestation created:", attestation);
-    return attestation.signature;
-  }
-
-  private generateSignature(): string {
-    // Generate a valid-looking Solana signature (88 characters base58)
-    const chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-    let sig = "";
-    for (let i = 0; i < 88; i++) {
-      sig += chars.charAt(Math.floor(Math.random() * chars.length));
+    // Ensure content hash is 32 bytes
+    let hashBytes: Uint8Array;
+    if (contentHash.length === 64) {
+      // Hex string
+      hashBytes = hexToBytes(contentHash);
+    } else {
+      // Create a hash from the content
+      const encoder = new TextEncoder();
+      const data = encoder.encode(contentHash);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+      hashBytes = new Uint8Array(hashBuffer);
     }
-    return sig;
+
+    // Derive PDAs
+    const [attestationPda] = PublicKey.findProgramAddressSync(
+      [ATTESTATION_SEED, Buffer.from(hashBytes)],
+      PROGRAM_ID
+    );
+    const [configPda] = getConfigPda();
+
+    // Convert probability to u16 (0-10000 for 0-100%)
+    const probU16 = Math.round(aiProbability * 100);
+
+    // Build instruction data
+    const contentTypeBytes = Buffer.from(contentType);
+    const detectionModelBytes = Buffer.from(detectionModel);
+    const metadataUriBytes = Buffer.from(metadataUri);
+
+    // Calculate buffer size
+    const dataSize =
+      8 + // discriminator
+      32 + // content_hash
+      2 + // ai_probability (u16)
+      4 +
+      contentTypeBytes.length + // string (4 byte len + data)
+      4 +
+      detectionModelBytes.length + // string
+      4 +
+      metadataUriBytes.length; // string
+
+    const data = Buffer.alloc(dataSize);
+    let offset = 0;
+
+    // Write discriminator
+    CREATE_ATTESTATION_DISCRIMINATOR.copy(data, offset);
+    offset += 8;
+
+    // Write content_hash
+    Buffer.from(hashBytes).copy(data, offset);
+    offset += 32;
+
+    // Write ai_probability (u16 little-endian)
+    data.writeUInt16LE(probU16, offset);
+    offset += 2;
+
+    // Write content_type string
+    data.writeUInt32LE(contentTypeBytes.length, offset);
+    offset += 4;
+    contentTypeBytes.copy(data, offset);
+    offset += contentTypeBytes.length;
+
+    // Write detection_model string
+    data.writeUInt32LE(detectionModelBytes.length, offset);
+    offset += 4;
+    detectionModelBytes.copy(data, offset);
+    offset += detectionModelBytes.length;
+
+    // Write metadata_uri string
+    data.writeUInt32LE(metadataUriBytes.length, offset);
+    offset += 4;
+    metadataUriBytes.copy(data, offset);
+
+    const instruction = new TransactionInstruction({
+      programId: PROGRAM_ID,
+      keys: [
+        { pubkey: this.provider.publicKey, isSigner: true, isWritable: true },
+        { pubkey: attestationPda, isSigner: false, isWritable: true },
+        { pubkey: configPda, isSigner: false, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      data,
+    });
+
+    const tx = new Transaction().add(instruction);
+    tx.feePayer = this.provider.publicKey;
+    tx.recentBlockhash = (
+      await this.provider.connection.getLatestBlockhash()
+    ).blockhash;
+
+    // Sign and send
+    const signedTx = await this.provider.wallet.signTransaction(tx);
+    const signature = await this.provider.connection.sendRawTransaction(
+      signedTx.serialize()
+    );
+
+    // Wait for confirmation
+    await this.provider.connection.confirmTransaction(signature, "confirmed");
+
+    console.log("Attestation created on-chain:", signature);
+    return signature;
   }
   async closeAttestation(contentHash: string): Promise<string> {
     if (!this.program) throw new Error("Program not initialized");
