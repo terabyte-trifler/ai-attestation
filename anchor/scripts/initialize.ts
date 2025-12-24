@@ -13,7 +13,7 @@ import * as os from "os";
 const PROGRAM_ID = new PublicKey(
   "21fNgCDmvWAchVyP7eFzaZijaCC8As7RJtuM8SGhv9qr"
 );
-const CLUSTER_URL = "https://api.devnet.solana.com";
+const CLUSTER_URL = "https://api.testnet.solana.com";
 
 // Initialize instruction discriminator from IDL
 const INITIALIZE_DISCRIMINATOR = Buffer.from([
