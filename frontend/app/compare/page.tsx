@@ -85,7 +85,7 @@ function getClassificationLabel(classification: string): string {
 function getClassificationColor(classification: string): string {
   switch (classification) {
     case "ai":
-      return "text-red-500";
+      return "text-red-500";   
     case "human":
       return "text-green-500";
     default:
